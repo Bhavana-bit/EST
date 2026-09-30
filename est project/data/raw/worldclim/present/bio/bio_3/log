@@ -1,0 +1,2 @@
+200601011820   0     1     0rhijmans P3 = int(floor(100 * P2 / P7) + 0.5)
+200601011822   0     0     0rhijmans RENAME p3 bio_3

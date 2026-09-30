@@ -1,0 +1,2 @@
+200601011820   0     2     0rhijmans P4 = int(floor(100 * std(..\tmean\tmean_1,..\tmean\tmean_2,..\tmean\tmean_3,..\tmean\tmean_4,..\tmean\tmean_5,..\tmean\tmean_6,..\tmean\tmean_7,..\tmean\tmean_8,..\tmean\tmean_9,..\tmean\tmean_10,..\tmean\tmean_11,..\tmean\tmean_12) + 0.5))
+200601011822   0     0     0rhijmans RENAME p4 bio_4

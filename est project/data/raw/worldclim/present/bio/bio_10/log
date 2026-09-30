@@ -1,0 +1,2 @@
+200601011822   0     1     0rhijmans P10 = int(floor(hot12 / 3 + 0.5))
+200601011822   0     0     0rhijmans RENAME p10 bio_10

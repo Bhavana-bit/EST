@@ -1,0 +1,3 @@
+Climate Source,Sample Size (Cells N),Spearman rho,Spearman p-value,Pearson r (log S+1),Pearson p-value
+WorldClim 1.4 (Present vs LGM CCSM4),1096,0.1302,1.5419e-05,0.1712,1.1747e-08
+PaleoClim v1.0 (Current vs LGM),1096,,nan,,nan

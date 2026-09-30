@@ -1,0 +1,2 @@
+200601011820   0     1     0rhijmans P2 = int(floor(mean(rg1,rg2,rg3,rg4,rg5,rg6,rg7,rg8,rg9,rg10,rg11,rg12) + 0.5))
+200601011822   0     0     0rhijmans RENAME p2 bio_2

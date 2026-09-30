@@ -1,0 +1,2 @@
+200601011821   0     1     0rhijmans P8 = int(floor(max(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12) / 3 + 0.5))
+200601011822   0     1     0rhijmans RENAME p8 bio_8

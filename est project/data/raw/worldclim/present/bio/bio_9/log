@@ -1,0 +1,2 @@
+200601011821   0     2     0rhijmans P9 = int(floor(max(y1,y2,y3,y4,y5,y6,y7,y8,y9,y10,y11,y12) / 3 + 0.5))
+200601011822   0     0     0rhijmans RENAME p9 bio_9
