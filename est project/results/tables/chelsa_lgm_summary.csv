@@ -1,0 +1,2 @@
+product,gbif_records_used,valid_occupied_cells,delta_t_chelsa_lgm_c_mean,delta_t_chelsa_lgm_c_median,delta_t_chelsa_lgm_c_minimum,delta_t_chelsa_lgm_c_maximum,observed_species_richness_mean,gbif_occurrence_count_mean,pearson_r,pearson_p,spearman_rho,spearman_p
+CHELSA v1.2B current versus LGM BIO1; not PaleoClim,16733,3519,7.018841743469238,4.700000762939453,0.09561347961425781,34.09965896606445,3.599886331344132,4.755044046604149,0.08441355632411608,5.312094523943766e-07,0.017783979201410383,0.2915740480800051

@@ -1,44 +1,43 @@
-# DATA_STATUS.md — Phase 1 Dataset Verification Report
+# Phase 1 Data Status
 
-**Project Title**: 24. Palaeoclimate Stability and Modern Biodiversity  
-**Phase**: Phase 1 Mid-Evaluation Pipeline  
-**Date of Audit**: 2026-09-30  
-**Target Analysis Grid**: WorldClim 10 arc-minutes (1080 rows x 2160 cols, EPSG:4326)
+## Five-Dataset Readiness
 
----
+| Intended dataset | Local status | Pipeline status |
+|---|---|---|
+| PaleoClim | **Missing.** No verified PaleoClim product/archive is present. Files under `data/raw/paleoclim/` are CHELSA v1.2B and PaleoView products, based on their archive names and local XML lineage. | Genuine PaleoClim is not used. CHELSA current–LGM is analyzed separately and labelled CHELSA. |
+| WorldClim | Present: extracted present BIO1 and LGM/mid-Holocene BIO1 rasters, with original source ZIP archives retained. | Used in Phase 1. |
+| GBIF | Present: regional/combined raw CSVs and species-rank cleaned CSVs. The cleaned records are mixed-taxonomic and provenance is incomplete. | Used in Phase 1 as observed richness across recorded taxa. |
+| IUCN | **Missing.** `data/raw/iucn/` is empty; no local range-polygon data were found in either project tree. | Not used. |
+| Copernicus DEM | **Missing.** `data/raw/dem/` is empty; no local DEM source raster/archive was found in either project tree. | Not used. |
 
-## 1. DATASET STATUS INVENTORY TABLE
+**Overall five-dataset project status: NOT COMPLETE.** The current three-product phase is runnable with WorldClim, GBIF, and the locally available CHELSA current/LGM rasters. Genuine PaleoClim, IUCN, and Copernicus DEM inputs are absent. CHELSA/PaleoView are not substitutes for PaleoClim.
 
-| Dataset | Period / Model | Spatial Resolution | CRS | Variables Verified | Units & Scaling | File / Data Status | Verification Note |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **WorldClim 1.4 Present** | 1960–1990 Baseline | 10 arc-minutes (~18.5 km) | EPSG:4326 | `BIO1` (Annual Mean Temp)<br>`BIO12` (Annual Precip) | `BIO1`: °C × 10 (Integer)<br>`BIO12`: mm/yr | Staged / Processing Ready | Divide `BIO1` by 10.0 to convert to °C |
-| **WorldClim 1.4 LGM** | ~22,000 BP (CCSM4 GCM) | 10 arc-minutes (~18.5 km) | EPSG:4326 | `BIO1` (Annual Mean Temp)<br>`BIO12` (Annual Precip) | `BIO1`: °C × 10 (Integer)<br>`BIO12`: mm/yr | Staged / Processing Ready | Primary palaeoclimate contrast for Phase 1 |
-| **WorldClim 1.4 Mid-Holocene** | ~6,000 BP (CCSM4 GCM) | 10 arc-minutes (~18.5 km) | EPSG:4326 | `BIO1` (Annual Mean Temp) | `BIO1`: °C × 10 (Integer) | Staged / Retained | Retained for Phase 2 extended analysis |
-| **GBIF Occurrences** | Modern Era (1950–Present) | Georeferenced Point Records | EPSG:4326 | `speciesKey`, `species`, `decimalLatitude`, `decimalLongitude` | Lat/Lon Coordinates | Cleaned Snapshot Ready | Binned to 10' cells for UNIQUE species count ($S$) |
-| **PaleoClim v1.0** | LGM (~21ka), Mid-Holocene (~6ka) | 10 arc-minutes | EPSG:4326 | `BIO1`, `BIO12` | °C, mm/yr | Phase 2 Deferred | Independent validation in Phase 2 |
-| **IUCN Spatial Data** | Modern Range Boundaries | Vector Range Polygons | EPSG:4326 | Range Polygons (`presence==1`, `origin==1`) | Vector Geometry | Phase 2 Deferred | Independent range validation in Phase 2 |
-| **Copernicus DEM** | Modern Topography | 90m / 10' Aggregated Grid | EPSG:4326 | Elevation ($m$), Roughness ($\sigma_z$) | Meters ($m$) | Phase 2 Deferred | Topographic heterogeneity control in Phase 2 |
+## Inputs Used
 
----
+| Input | Local file | Use |
+|---|---|---|
+| WorldClim present BIO1 | `data/raw/worldclim/present/bio/bio_1/` | Authoritative analysis grid and present baseline |
+| WorldClim LGM BIO1 | `data/raw/worldclim/lgm/cclgmbi1.tif` | Primary past climate comparison |
+| WorldClim mid-Holocene BIO1 | `data/raw/worldclim/mid_holocene/ccmidbi1.tif` | Separate secondary comparison |
+| GBIF cleaned observations | `data/processed/gbif/gbif_clean.csv` | Mixed-taxon observed occurrence richness |
+| CHELSA current BIO1 | `data/raw/paleoclim/paleoclim_current_BIO1.tif` | Independent current baseline for CHELSA comparison |
+| CHELSA LGM BIO1 | `data/raw/paleoclim/paleoclim_LGM_BIO1.tif` | Independent CHELSA LGM comparison |
 
-## 2. PHASE 1 VERIFICATION & METHODOLOGICAL DECISIONS
+The present WorldClim BIO1 grid is EPSG:4326, 2160 columns by 900 rows, with nominal 10 arc-minute resolution and approximately −180° to 180° longitude and −60° to 90° latitude coverage. Its exact transform is read from the raster and used for every output. LGM and mid-Holocene rasters are geospatially reprojected to that grid. Source NoData is masked before BIO1 is divided by 10 to convert °C × 10 to °C.
 
-1. **Common Spatial Grid**:
-   - WorldClim 10 arc-minute global grid ($1080 \text{ rows} \times 2160 \text{ columns}$, extent $[-180, 180, -90, 90]$).
-   - **Unequal-Area Limitation**: 10-arc-minute geographic grid cells decrease in physical surface area from the equator toward the poles. In Phase 1, raw cell species counts are evaluated with this limitation explicitly documented.
+## Definitions
 
-2. **Project-Defined Climate Stability Metric**:
-   - Primary contrast: Present (1960–1990) vs. Last Glacial Maximum ($\sim 22,000\text{ BP}$ CCSM4 model).
-   - Metric:
-     $$\Delta T = | \text{Present BIO1 (°C)} - \text{LGM BIO1 (°C)} |$$
-   - Smaller $\Delta T$ represents greater temperature stability under this project-defined metric.
+- `DeltaT_LGM = abs(Present BIO1 - LGM BIO1)` in °C. Interpret only as a present–LGM thermal-change proxy for climatic stability.
+- `DeltaT_MH = abs(Present BIO1 - Mid-Holocene BIO1)` in °C, reported as a separate secondary contrast.
+- Per-cell observed richness is the number of unique `speciesKey` values in the supplied GBIF records.
+- Per-cell occurrence count is the number of GBIF records and is a sampling-effort indicator, not richness.
 
-3. **GBIF Species Richness Calculation**:
-   - Taxon: **Mammalia** (Class Key 359).
-   - Calculated as $S_i = \text{number of UNIQUE species recorded in cell } i$. Raw GBIF record count is NOT used as species richness.
+The cleaned GBIF table contains species-rank records but mixed taxa. Outputs must be called “GBIF-observed species richness across recorded taxa”; they are not bird richness, mammal richness, or complete global biodiversity. Geographic/taxonomic reporting bias and unequal geographic cell area limit interpretation. Correlations are associations, not causal evidence.
 
-4. **Phase 1 Output Deliverables**:
-   - MAP 1: Present-vs-LGM BIO1 absolute temperature difference ($\Delta T$).
-   - MAP 2: GBIF Mammalia unique species richness ($S$).
-   - Scatter Plot: Log-transformed species richness $\log(S+1)$ vs. Temperature Difference $\Delta T$.
-   - Descriptive Summary Table & Mid-Evaluation Documentation.
+## Not Used
+
+The CHELSA v1.2B current and LGM rasters are used only in a separate comparison; they are not combined with WorldClim inputs. The PaleoView late-Holocene raster is retained but not analyzed. No genuine PaleoClim, IUCN, or DEM analysis is implemented.
+
+## Generated Outputs
+
+Run `python run_phase1.py` to regenerate the WorldClim and CHELSA DeltaT rasters, GBIF per-cell tables, the WorldClim combined analysis table, separate CHELSA comparison tables, summary statistics, maps, and scatter plots. Run with `--validate-only` to check inputs without writing outputs. The `data/raw/iucn/` and `data/raw/dem/` directories are placeholders; genuine PaleoClim is also missing. Only regenerated `phase1_` outputs in `results/maps/` and the current CSVs in `results/tables/` are submission outputs.

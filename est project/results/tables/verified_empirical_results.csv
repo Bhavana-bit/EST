@@ -1,3 +1,0 @@
-Climate Source,Sample Size N,DeltaT Mean (deg C),Species Richness S Mean,Spearman rho,Spearman p-value,Pearson r (log S+1),Pearson p-value
-WorldClim 1.4 (Present vs LGM CCSM4),2868,16.04,3.89,-0.1047,1.8983e-08,-0.1063,1.1619e-08
-PaleoClim v1.0 (Current vs LGM),3173,10.6,3.8,0.0256,1.4978e-01,0.0448,1.1538e-02

@@ -1,35 +1,13 @@
-# WORLDCLIM_METADATA.md — WorldClim 1.4 Provenance & Verification Record
+# WorldClim Phase 1 Inputs
 
-**Project Title**: 24. Palaeoclimate Stability and Modern Biodiversity  
-**Dataset Version**: WorldClim Version 1.4 (Release 1.4)  
-**Spatial Resolution**: 10 arc-minutes (~18.5 km at equator)  
-**CRS**: EPSG:4326 (WGS 84 Geographic Latitude/Longitude)  
-**Spatial Extent**: Global [-180.0, 180.0, -90.0, 90.0]  
-**Grid Shape**: 1080 rows x 2160 columns  
+The local WorldClim metadata and raster headers were inspected directly. Each period has BIO1, and BIO1 values are stored as integer °C × 10 with NoData `-32768`. The pipeline masks NoData, converts BIO1 to °C, and aligns past rasters to the present BIO1 transform using bilinear geospatial reprojection.
 
----
+| Period | BIO1 path | Format | CRS | Dimensions | Nominal resolution | Bounds |
+|---|---|---|---|---|---|---|
+| Present baseline (1960–1990) | `data/raw/worldclim/present/bio/bio_1/` | ESRI Grid | EPSG:4326 | 2160 columns × 900 rows | 10 arc-minutes | approximately −180° to 180° longitude, −60° to 90° latitude |
+| LGM CCSM4 (~22 ka) | `data/raw/worldclim/lgm/cclgmbi1.tif` | GeoTIFF | EPSG:4326 | 2160 columns × 900 rows | 10 arc-minutes | −180° to 180° longitude, −60° to 90° latitude |
+| Mid-Holocene CCSM4 (~6 ka) | `data/raw/worldclim/mid_holocene/ccmidbi1.tif` | GeoTIFF | EPSG:4326 | 2160 columns × 900 rows | 10 arc-minutes | −180° to 180° longitude, −60° to 90° latitude |
 
-## 1. OFFICIAL SOURCE URLS & PERIOD SPECIFICATIONS
+Present BIO1 has transform resolution approximately 0.166666675359° and origin (−180°, 90.000007823°). LGM and mid-Holocene BIO1 have resolution 1/6° and origin (−180°, 90°). Although dimensions and nominal coverage match, their transforms differ slightly; the present raster is the authoritative target grid.
 
-| Period / Scenario | Temporal Period | GCM Model | Official Source URL | File Format |
-| :--- | :--- | :--- | :--- | :--- |
-| **Present Baseline** | 1960–1990 Baseline | Observed Climatology | `https://biogeo.ucdavis.edu/data/climate/worldclim/1_4/grid/cur/bio_10m_bil.zip` | BIL / GeoTIFF archive |
-| **Last Glacial Maximum (LGM)** | ~22,000 BP | CCSM4 | `https://biogeo.ucdavis.edu/data/climate/worldclim/1_4/grid/past/lgm/ccsm4_lgm_10m.zip` | BIL / GeoTIFF archive |
-| **Mid-Holocene** | ~6,000 BP | CCSM4 | `https://biogeo.ucdavis.edu/data/climate/worldclim/1_4/grid/past/mid_holocene/ccsm4_mid_holocene_10m.zip` | BIL / GeoTIFF archive |
-
----
-
-## 2. VARIABLE & UNIT VERIFICATION
-
-| Variable | Official Name | Raw Data Unit / Encoding | Processed Unit | Conversion Rule |
-| :--- | :--- | :--- | :--- | :--- |
-| `BIO1` | Annual Mean Temperature | Integer (°C × 10) | Floating-point °C | `BIO1_degc = raw_bio1 / 10.0` |
-| `BIO12` | Annual Precipitation | Integer (mm/year) | mm/year | No conversion required |
-
----
-
-## 3. PROJECT-DEFINED TEMPERATURE DIFFERENCE METRIC
-
-$$\Delta T_{\text{LGM}} = | \text{BIO1}_{\text{Present}} - \text{BIO1}_{\text{LGM}} | \quad (°\text{C})$$
-
-* **Interpretation**: Smaller absolute temperature difference $\Delta T$ represents greater long-term thermal stability under this project-defined metric.
+The corresponding BIO12 files are present in all three datasets (`bio_12/w001001.adf`, `cclgmbi12.tif`, `ccmidbi12.tif`) and encode annual precipitation in mm/year. Phase 1 currently analyzes BIO1 only.

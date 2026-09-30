@@ -1,77 +1,39 @@
 # Palaeoclimate Stability and Modern Biodiversity
 
-A scientifically rigorous, reproducible research framework investigating whether modern biodiversity-rich regions are disproportionately associated with long-term climatic stability.
+**Research question:** Are present biodiversity-rich regions disproportionately associated with long-term climatic stability?
 
----
+## Current Work
 
-## 1. Official Dataset Inventory
+This mid-evaluation phase uses three locally available datasets/products:
 
-| Dataset | Official Source | Version / Product Used | Spatial Resolution | CRS | Temporal Period | Key Variables | Units | Primary Research Role |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **WorldClim** | [worldclim.org](https://www.worldclim.org/) | WorldClim v1.4 | 10 arc-minutes (~18.5 km) | EPSG:4326 | Present (1960–1990), Mid-Holocene (~6ka CCSM4), LGM (~22ka CCSM4) | `BIO1` (Annual Mean Temp), `BIO12` (Annual Precip) | `BIO1`: °C × 10<br>`BIO12`: mm/yr | Primary palaeoclimate stability source ($\Delta T = \|T_{\text{present}} - T_{\text{LGM}}\|$) |
-| **PaleoClim** | [paleoclim.org](http://www.paleoclim.org/) | PaleoClim v1.0 | 10 arc-minutes (or resampled 2.5') | EPSG:4326 | Mid-Holocene (~6ka), LGM (~21ka), LIG (~130ka) | `BIO1`, `BIO12`, `BIO4`, `BIO15` | °C, mm/yr | Independent palaeoclimate model validation source |
-| **GBIF** | [gbif.org](https://www.gbif.org/) | API Occurrence Snapshot (Mammalia) | Georeferenced Point Records | EPSG:4326 | Modern Era | `species`, `decimalLatitude`, `decimalLongitude`, `occurrenceStatus`, `basisOfRecord` | Latitude/Longitude coordinates | Modern empirical species richness ($S = \text{unique species / cell}$) |
-| **IUCN Red List** | [iucnredlist.org](https://www.iucnredlist.org/) | IUCN Spatial Range Polygons | Vector Polygons | EPSG:4326 | Modern Range Boundaries | Range Polygons (`presence==1`, `origin==1`) | Geographic Polygons | Independent expert-validated range richness cross-validation |
-| **Copernicus DEM** | [copernicus-dem](https://registry.opendata.aws/copernicus-dem/) | GLO-90 / Aggregated 10' Grid | 90m aggregated to 10 arc-min | EPSG:4326 | Modern Relief | Elevation ($m$), Topographic Heterogeneity / Roughness ($\sigma_z$) | Meters ($m$) | Topographic relief & microrefugia confounding control |
+- **WorldClim:** present, LGM, and mid-Holocene BIO1. BIO1 is converted from °C × 10 to °C. Present–LGM absolute change is the primary thermal-change proxy; present–mid-Holocene change is reported separately.
+- **GBIF:** species-rank occurrence records from the cleaned local table. Richness is unique `speciesKey` count per occupied grid cell; occurrence count is retained as a sampling-effort indicator. The records are mixed-taxonomic, so results are not bird or mammal richness and do not represent complete biodiversity.
+- **CHELSA v1.2B:** a separate current–LGM BIO1 comparison using the locally available rasters. These files are not PaleoClim. The PaleoView late-Holocene archive is retained but not analyzed.
 
----
+The WorldClim present BIO1 raster defines the target grid. Past climate rasters and CHELSA rasters are aligned by geospatial reprojection using their CRS and transforms. The WorldClim and CHELSA comparisons are calculated separately. Associations are descriptive and do not establish causation.
 
-## 2. Directory Structure
+**Future additions:** IUCN range data and Copernicus DEM data are not implemented. A verified PaleoClim product is also not present, so the complete five-dataset project is not finished.
 
-```
-est project/
-├── DATA_STATUS.md
-├── README.md
-├── requirements.txt
-├── config.py
-├── run_pipeline.py
-├── data/
-│   ├── raw/
-│   └── processed/
-├── src/
-│   ├── download_all_data.py
-│   ├── 01_validate_data.py
-│   ├── 02_prepare_worldclim.py
-│   ├── 03_prepare_paleoclim.py
-│   ├── 04_prepare_gbif.py
-│   ├── 05_prepare_iucn.py
-│   ├── 06_prepare_dem.py
-│   ├── 07_calculate_stability.py
-│   ├── 08_biodiversity_analysis.py
-│   └── 09_visualization.py
-└── results/
-    ├── maps/
-    ├── tables/
-    └── statistics/
-```
+## Run
 
----
+From this directory, validate inputs without writing outputs:
 
-## 3. How to Execute
-
-### Option A: Complete Pipeline Run
 ```bash
-py run_pipeline.py
+python run_phase1.py --validate-only
 ```
 
-### Option B: Automated Dataset Download
+Run the analysis:
+
 ```bash
-py src/download_all_data.py
+python run_phase1.py
 ```
 
----
+Current tables and figures are saved in `results/tables/` and `results/maps/`. Processed rasters and GBIF tables are stored in `data/processed/`. The pipeline uses local data only and has no synthetic-data fallback.
 
-## 4. Key Methodological Principles
+## Main Outputs
 
-1. **GBIF Species Richness Calculation**:
-   - $S_i =$ Count of **UNIQUE** species in cell $i$, NOT raw record count.
-   - Sampling effort ($\log(\text{Records}_i)$) included as a covariate in regression to control spatial sampling bias.
+- `results/tables/final_analysis.csv` and `summary_statistics.csv`: WorldClim contrasts joined with GBIF cell richness and record counts.
+- `results/tables/chelsa_lgm_cell_analysis.csv` and `chelsa_lgm_summary.csv`: separate CHELSA current–LGM comparison.
+- `results/maps/`: current thermal-change maps, GBIF richness map, and scatter plots.
 
-2. **WorldClim Temperature Unit Verification**:
-   - WorldClim 1.4 `BIO1` values are encoded as °C × 10. They are divided by 10 to yield °C before computing temperature differences ($\Delta T$).
-
-3. **Climate Stability Index ($I_{\text{stability}}$)**:
-   - $I_{\text{stability}} = 1 - \frac{1}{2}(\widetilde{\Delta T_{\text{LGM}}} + \widetilde{\Delta P_{\text{LGM}}})$, where $\widetilde{\Delta T}$ and $\widetilde{\Delta P}$ are 99th-percentile normalized anomalies.
-
-4. **Observational Language**:
-   - All findings report statistical **associations** and **correlations**, avoiding unfounded causal claims.
+GBIF occurrences are unevenly sampled geographically and taxonomically. The 10-arc-minute geographic grid has unequal cell area by latitude. Both limit interpretation of observed cell richness.
