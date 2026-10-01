@@ -19,14 +19,24 @@ TABLES_DIR = RESULTS_DIR / "tables"
 GBIF_RAW_DIR = RAW_DATA_DIR / "gbif"
 GBIF_CSV = GBIF_PROCESSED_DIR / "gbif_clean.csv"
 
+# Target Taxon Configuration (Confirmed by team)
+TARGET_TAXON_NAME = "Aves"
+TARGET_TAXON_KEY = 212
+
 WORLDCLIM_PRESENT_BIO1 = WORLDCLIM_DIR / "present" / "bio" / "bio_1"
 WORLDCLIM_LGM_BIO1 = WORLDCLIM_DIR / "lgm" / "cclgmbi1.tif"
 WORLDCLIM_MID_HOLOCENE_BIO1 = WORLDCLIM_DIR / "mid_holocene" / "ccmidbi1.tif"
 
-CHELSA_CURRENT_BIO1 = PALEOCLIM_DIR / "paleoclim_current_BIO1.tif"
-CHELSA_LATE_HOLOCENE_BIO1 = PALEOCLIM_DIR / "paleoclim_late_holocene_BIO1.tif"
-CHELSA_LGM_BIO1 = PALEOCLIM_DIR / "paleoclim_LGM_BIO1.tif"
-CHELSA_LGM_BIO1_ALIGNED = PALEOCLIM_DIR / "paleoclim_LGM_BIO1_aligned.tif"
+PALEOCLIM_CURRENT_BIO1 = PALEOCLIM_DIR / "paleoclim_current_BIO1.tif"
+PALEOCLIM_LATE_HOLOCENE_BIO1 = PALEOCLIM_DIR / "paleoclim_late_holocene_BIO1.tif"
+PALEOCLIM_LGM_BIO1 = PALEOCLIM_DIR / "paleoclim_LGM_BIO1.tif"
+PALEOCLIM_LGM_BIO1_ALIGNED = PALEOCLIM_DIR / "paleoclim_LGM_BIO1_aligned.tif"
+
+# Backward compatibility aliases
+CHELSA_CURRENT_BIO1 = PALEOCLIM_CURRENT_BIO1
+CHELSA_LATE_HOLOCENE_BIO1 = PALEOCLIM_LATE_HOLOCENE_BIO1
+CHELSA_LGM_BIO1 = PALEOCLIM_LGM_BIO1
+CHELSA_LGM_BIO1_ALIGNED = PALEOCLIM_LGM_BIO1_ALIGNED
 
 GRID_DEGREES = 5.0
 CLIMATE_PROCESSED_DIR = PROCESSED_DATA_DIR / "climate"
@@ -43,4 +53,5 @@ BIODIV_CLIMATE_STATS_CSV = RESULTS_DIR / "biodiversity_climate_statistics.csv"
 BIODIV_CLIMATE_MORAN_CSV = RESULTS_DIR / "biodiversity_climate_moran_i.csv"
 BIODIV_CLIMATE_SENSITIVITY_CSV = RESULTS_DIR / "biodiversity_climate_sensitivity_thresholds.csv"
 MAIN_SCATTER_PNG = MAPS_DIR / "biodiversity_vs_climate_stability_5deg.png"
+
 

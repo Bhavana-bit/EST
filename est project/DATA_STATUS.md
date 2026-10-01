@@ -1,46 +1,44 @@
-# Phase 1 Data Status
+# Dataset Status & Product Integrity
 
-## Five-Dataset Readiness
+> [!CAUTION]
+> **PRELIMINARY: mixed-taxon, capped sample (5,000/1,000 per continent), no GBIF download key. Not valid for taxon richness.**
 
-| Intended dataset | Local status | Pipeline status |
+## Dataset Readiness Overview
+
+| Dataset | Local Status | Pipeline Status & Product Identity |
 |---|---|---|
-| PaleoClim | **Missing.** No verified PaleoClim product/archive is present. Files under `data/raw/paleoclim/` are CHELSA v1.2B and PaleoView products, based on their archive names and local XML lineage. | Genuine PaleoClim is not used. CHELSA current–LGM is analyzed separately and labelled CHELSA. |
-| WorldClim | Present: extracted present BIO1 and LGM/mid-Holocene BIO1 rasters, with original source ZIP archives retained. | Used in Phase 1. |
-| GBIF | Present: regional raw CSVs with unequal continental caps (5,000 or 1,000 records). Reproducible cleaning is implemented in `src/gbif_clean.py`. The cleaned records are mixed-taxonomic and provenance is incomplete. | Used in Phase 1 as a sample-based occurrence dataset, not a biodiversity census. |
-| IUCN | **Missing.** `data/raw/iucn/` is empty; no local range-polygon data were found in either project tree. | Not used. |
-| Copernicus DEM | **Missing.** `data/raw/dem/` is empty; no local DEM source raster/archive was found in either project tree. | Not used. |
+| **Paleoclimate Rasters** | **Present** | Rasters under `data/raw/paleoclim/` (`paleoclim_current_BIO1.tif`, `paleoclim_late_holocene_BIO1.tif`, `paleoclim_LGM_BIO1_aligned.tif`). Used for 5° LGM-dominated temperature stability index (Headline Analysis) and 10′ Phase 1 $\Delta T$ comparison. |
+| **WorldClim** | **Present & Supporting** | Present, LGM, and mid-Holocene BIO1 rasters at 10 arc-minute resolution under `data/raw/worldclim/`. Used for Phase 1 10′ thermal change proxies. |
+| **GBIF** | **Present & Cleaned** | Regional raw occurrence downloads ($16,521$ records cleaned reproducibly via `src/gbif_clean.py`). Aggregated to 5° grid cells for sampling effort (`occurrence_count`) and species richness (`species_richness` & rarefied richness). **PRELIMINARY: mixed-taxon, capped sample (5,000/1,000 per continent), no GBIF download key. Not valid for taxon richness.** |
+| **IUCN** | **Missing** | `data/raw/iucn/` is empty; no local range-polygon data are present. Marked as future extension. |
+| **Copernicus DEM** | **Missing** | `data/raw/dem/` is empty; no local elevation/DEM rasters are present. Marked as future extension. |
 
-**Overall five-dataset project status: NOT COMPLETE.** The current three-product phase is runnable with WorldClim, GBIF, and the locally available CHELSA current/LGM rasters. Genuine PaleoClim, IUCN, and Copernicus DEM inputs are absent. CHELSA/PaleoView are not substitutes for PaleoClim.
+---
 
-## Inputs Used
+## Methodological Status & Team Decisions
 
-| Input | Local file | Use |
-|---|---|---|
-| WorldClim present BIO1 | `data/raw/worldclim/present/bio/bio_1/` | Authoritative analysis grid and present baseline |
-| WorldClim LGM BIO1 | `data/raw/worldclim/lgm/cclgmbi1.tif` | Primary past climate comparison |
-| WorldClim mid-Holocene BIO1 | `data/raw/worldclim/mid_holocene/ccmidbi1.tif` | Separate secondary comparison |
-| GBIF cleaned observations | `processed_data/gbif/gbif_clean.csv` | Mixed-taxon sample-based occurrence records after reproducible cleaning |
-| GBIF 5° sampling effort | `processed_data/gbif/gbif_sampling_effort_5deg.csv` | Per-cell occurrence count and species richness on a 5° grid |
-| GBIF cleaning summary | `results/gbif/gbif_cleaning_summary.csv` | Row counts removed at each cleaning stage |
-| CHELSA current BIO1 | `data/raw/paleoclim/paleoclim_current_BIO1.tif` | Independent current baseline for CHELSA comparison |
-| CHELSA LGM BIO1 | `data/raw/paleoclim/paleoclim_LGM_BIO1.tif` | Independent CHELSA LGM comparison |
+- **Taxon Selection & Scope:** Confirmed by team (Aves, GBIF taxonKey 212).
+- **Spatial Grid Scale:** Confirmed by team (5° × 5° grid).
+- **Coordinate Uncertainty Filtering Threshold:** Decision required from project team.
 
-The present WorldClim BIO1 grid is EPSG:4326, 2160 columns by 900 rows, with nominal 10 arc-minute resolution and approximately −180° to 180° longitude and −60° to 90° latitude coverage. Its exact transform is read from the raster and used for every output. LGM and mid-Holocene rasters are geospatially reprojected to that grid. Source NoData is masked before BIO1 is divided by 10 to convert °C × 10 to °C.
+---
 
-## Definitions
+## Analysis Identification
 
-- `DeltaT_LGM = abs(Present BIO1 - LGM BIO1)` in °C. Interpret only as a present–LGM thermal-change proxy for climatic stability.
-- `DeltaT_MH = abs(Present BIO1 - Mid-Holocene BIO1)` in °C, reported as a separate secondary contrast.
-- Per-cell observed richness is the number of unique `speciesKey` values in the cleaned GBIF records.
-- Per-cell occurrence count is the number of GBIF records and is a sampling-effort indicator, not richness.
-- The 5° grid reports coarse-scale sampling effort (`occurrence_count`, `species_richness`). The Phase 1 climate grid remains the WorldClim 10 arc-minute raster for spatial comparability with thermal-change proxies.
+1. **Headline Analysis (5° Climate Stability Index):**
+   - Evaluates multi-period temperature variability on a 5° global grid using BIO1 across Current, Late Holocene, and LGM.
+   - Index formula: `1 / (1 + SD(Current, Late Holocene, LGM))`.
+   - LGM-dominated: SD index is 0.9996 correlated with Present–LGM change.
+   - **GBIF Results Notice:** PRELIMINARY: mixed-taxon, capped sample (5,000/1,000 per continent), no GBIF download key. Not valid for taxon richness.
 
-The cleaned GBIF table contains species-rank records but mixed taxa. Outputs must be called “GBIF-observed species richness across recorded taxa”; they are not bird richness, mammal richness, or a complete census of global biodiversity. Continental download caps, geographic/taxonomic reporting bias, and unequal geographic cell area limit interpretation. Removing duplicate occurrence keys or species-coordinate repeats reduces count inflation but does not make the sample unbiased. Correlations are associations, not causal evidence.
+2. **Phase 1 Supporting Analysis (10′ ΔT):**
+   - Evaluates absolute temperature change at 10 arc-minute resolution for WorldClim Present–LGM, WorldClim Present–mid-Holocene, and CHELSA/PaleoClim Present–LGM.
+   - **GBIF Results Notice:** PRELIMINARY: mixed-taxon, capped sample (5,000/1,000 per continent), no GBIF download key. Not valid for taxon richness.
 
-## Not Used
+---
 
-The CHELSA v1.2B current and LGM rasters are used only in a separate comparison; they are not combined with WorldClim inputs. The PaleoView late-Holocene raster is retained but not analyzed. No genuine PaleoClim, IUCN, or DEM analysis is implemented.
+## File Verification & Generated Artifacts
 
-## Generated Outputs
-
-Run `python run_phase1.py` to regenerate the WorldClim and CHELSA DeltaT rasters, GBIF per-cell tables, the WorldClim combined analysis table, separate CHELSA comparison tables, summary statistics, maps, and scatter plots. Run with `--validate-only` to check inputs without writing outputs. The `data/raw/iucn/` and `data/raw/dem/` directories are placeholders; genuine PaleoClim is also missing. Only regenerated `phase1_` outputs in `results/maps/` and the current CSVs in `results/tables/` are submission outputs.
+- All cleaned GBIF occurrences are written to `processed_data/gbif/gbif_clean.csv`.
+- Climate stability rasters are saved in `processed_data/climate/climate_stability_5deg.tif` and `data/processed/climate/climate_stability_5deg.tif`.
+- Final statistical tables and maps are exported to `results/`, `results/tables/`, and `results/maps/`.

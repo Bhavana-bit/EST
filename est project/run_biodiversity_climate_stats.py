@@ -5,7 +5,8 @@ from src.biodiversity_climate_stats import run_analysis
 
 def main() -> None:
     statistics, sensitivity, moran = run_analysis()
-    print("=== Primary Spearman and Covariate Controls (n=369) ===")
+    n_primary = statistics.loc[statistics["model"] == "spearman_primary", "n"].values[0]
+    print(f"=== Primary Spearman and Covariate Controls (n={n_primary}) ===")
     print(
         statistics[
             [

@@ -1,2 +1,2 @@
 index_name,formula,grid_degrees,valid_5deg_cells,bio1_sd_c_mean,bio1_sd_c_median,stability_mean,stability_median,cell_area_km2_min,cell_area_km2_max,fine_pixels_all_three_periods
-PROJECT-DEFINED TEMPERATURE STABILITY INDEX,"1/(1+SD(bio1_current_c, bio1_late_holocene_c, bio1_lgm_c))",5.0,1472,5.314135551452637,4.234437942504883,0.2394227534532547,0.19104257225990295,13483.092551229762,308813.5906611655,808202
+PALEOCLIM LGM-DOMINATED TEMPERATURE STABILITY INDEX,"1/(1+SD(bio1_current_c, bio1_late_holocene_c, bio1_lgm_c))",5.0,1392,5.485978126525879,4.542451858520508,0.2301289290189743,0.18042604625225067,13483.092551229762,308813.5906611655,808202

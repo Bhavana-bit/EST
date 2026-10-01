@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -16,13 +18,25 @@ import config
 
 CAUSAL_NOTE = (
     "Descriptive cell-level association only; does not establish causation or "
-    "account for unmeasured ecological confounders."
+    "account for unmeasured ecological confounders. Standard p-values ignore spatial autocorrelation."
 )
 
 
 def _spearman(y: np.ndarray, x: np.ndarray) -> tuple[float, float]:
     result = stats.spearmanr(y, x)
     return float(result.statistic), float(result.pvalue)
+
+
+def _confidence_interval(r: float, n: int, confidence: float = 0.95) -> tuple[float, float]:
+    """Calculate Fisher z-transform confidence interval for rank or Pearson correlation."""
+    if n <= 3 or not np.isfinite(r) or abs(r) >= 1.0:
+        return (np.nan, np.nan)
+    z = np.arctanh(r)
+    se = 1.0 / math.sqrt(n - 3)
+    z_crit = stats.norm.ppf((1.0 + confidence) / 2.0)
+    z_low = z - z_crit * se
+    z_high = z + z_crit * se
+    return (float(np.tanh(z_low)), float(np.tanh(z_high)))
 
 
 def _partial_spearman(
@@ -67,7 +81,10 @@ def _queen_weights(lat_index: np.ndarray, lon_index: np.ndarray) -> np.ndarray:
                 neighbor = index.get((lat + dlat, lon + dlon))
                 if neighbor is not None:
                     weights[i, neighbor] = 1.0
-    return weights
+    # Row-standardize weights
+    row_sums = weights.sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1.0
+    return weights / row_sums
 
 
 def _morans_i(values: np.ndarray, weights: np.ndarray, permutations: int = 999) -> dict:
@@ -120,10 +137,10 @@ def _load_5deg_dataset() -> pd.DataFrame:
     return merged
 
 
-def _render_plots(df: pd.DataFrame, sens: pd.DataFrame, rho_primary: float, p_primary: float) -> None:
+def _render_plots(df: pd.DataFrame, sens: pd.DataFrame, stats_summary: dict) -> None:
     config.MAPS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Main Scatter Plot
+    # 1. Main Scatter Plot with Log-Scale Richness and Dynamic Statistics Text
     fig, ax = plt.subplots(figsize=(10, 6.5))
     sc = ax.scatter(
         df["temperature_stability_index"],
@@ -134,23 +151,24 @@ def _render_plots(df: pd.DataFrame, sens: pd.DataFrame, rho_primary: float, p_pr
         alpha=0.85,
         edgecolors="none",
     )
+    ax.set_yscale("log")
     cb = fig.colorbar(sc, ax=ax, pad=0.02)
     cb.set_label("Sampling Effort: log₁₀(GBIF occurrence count per cell)", fontsize=11)
 
-    # Annotate statistics
+    # Construct statistics text dynamically from computed metrics
     stats_text = (
         f"Primary Spearman Test:\n"
-        f"  n = {len(df)}\n"
-        f"  ρ = {rho_primary:+.4f} (p = {p_primary:.4f})\n\n"
+        f"  n = {stats_summary['n']}\n"
+        f"  ρ = {stats_summary['rho_primary']:+.4f} (p = {stats_summary['p_primary']:.4f})\n\n"
         f"Partial Correlations:\n"
-        f"  Control effort: r = +0.2313 (p < 0.0001)\n"
-        f"  Control effort + |lat|: r = +0.1510 (p = 0.0037)\n\n"
+        f"  Control effort: r = {stats_summary['r_eff']:+.4f} (p = {stats_summary['p_eff']:.4f})\n"
+        f"  Control effort + |lat|: r = {stats_summary['r_both']:+.4f} (p = {stats_summary['p_both']:.4f})\n\n"
         f"Regional Subsets:\n"
-        f"  Extratropics (|lat|>23.5°): ρ = +0.2183 (p = 0.0015)\n"
-        f"  Tropics (|lat|≤23.5°): ρ = -0.1903 (p = 0.0159)\n\n"
+        f"  Extratropics (|lat|>23.5°): ρ = {stats_summary['r_extra']:+.4f} (p = {stats_summary['p_extra']:.4f})\n"
+        f"  Tropics (|lat|≤23.5°): ρ = {stats_summary['r_trop']:+.4f} (p = {stats_summary['p_trop']:.4f})\n\n"
         f"Spatial Autocorrelation:\n"
-        f"  Moran's I (richness) = 0.3301 (p = 0.0010)\n"
-        f"  Moran's I (stability) = 0.7948 (p = 0.0010)"
+        f"  Moran's I (richness) = {stats_summary['moran_i_rich']:+.4f} (p = {stats_summary['moran_p_rich']:.4f})\n"
+        f"  Moran's I (stability) = {stats_summary['moran_i_stab']:+.4f} (p = {stats_summary['moran_p_stab']:.4f})"
     )
     ax.text(
         0.03,
@@ -163,10 +181,10 @@ def _render_plots(df: pd.DataFrame, sens: pd.DataFrame, rho_primary: float, p_pr
     )
 
     ax.set_xlabel("Palaeoclimate Temperature Stability Index: 1 / (1 + SD(BIO1) °C)", fontsize=12)
-    ax.set_ylabel("GBIF Unique Species Richness (per 5° cell)", fontsize=12)
+    ax.set_ylabel("GBIF Unique Species Richness (log scale)", fontsize=12)
     ax.set_title(
         "Modern Biodiversity Richness vs. Palaeoclimate Stability (5° Grid Cells)\n"
-        "CHELSA/PaleoClim BIO1 (Current, Late Holocene, LGM) and GBIF Observations",
+        "PaleoClim BIO1 (Current, Late Holocene, LGM) and GBIF Observations",
         fontsize=13,
         pad=12,
     )
@@ -174,49 +192,55 @@ def _render_plots(df: pd.DataFrame, sens: pd.DataFrame, rho_primary: float, p_pr
     fig.savefig(config.MAIN_SCATTER_PNG, dpi=200)
     plt.close(fig)
 
-    # 2. Sensitivity across Record Thresholds Plot
-    fig, ax = plt.subplots(figsize=(8, 5))
+    # 2. Threshold Sensitivity Plot with 95% Confidence Intervals
+    fig, ax = plt.subplots(figsize=(8.5, 5.5))
+    thresholds = sens["min_occurrence_threshold"]
+    rho_val = sens["spearman_rho"]
+    rho_low = sens["spearman_rho_ci_lower"]
+    rho_high = sens["spearman_rho_ci_upper"]
+    part_val = sens["partial_r_control_effort_and_abs_lat"]
+    part_low = sens["partial_r_ci_lower"]
+    part_high = sens["partial_r_ci_upper"]
+
+    ax.plot(thresholds, rho_val, marker="o", color="#1f77b4", linewidth=2, label="Raw Spearman ρ")
+    ax.fill_between(thresholds, rho_low, rho_high, color="#1f77b4", alpha=0.15)
+
     ax.plot(
-        sens["min_occurrence_threshold"],
-        sens["spearman_rho"],
-        marker="o",
-        color="#1f77b4",
-        linewidth=2,
-        label="Raw Spearman ρ",
-    )
-    ax.plot(
-        sens["min_occurrence_threshold"],
-        sens["partial_r_control_effort_and_abs_lat"],
+        thresholds,
+        part_val,
         marker="s",
         color="#2ca02c",
         linewidth=2,
         linestyle="--",
-        label="Partial r (control effort + |latitude|)",
+        label="Partial r (control effort + |lat|)",
     )
+    ax.fill_between(thresholds, part_low, part_high, color="#2ca02c", alpha=0.15)
+
     ax.axhline(0, color="gray", linestyle=":", linewidth=1)
     for _, row in sens.iterrows():
         th = int(row["min_occurrence_threshold"])
         n_c = int(row["n_cells"])
         rho = row["spearman_rho"]
-        ax.annotate(
-            f"n={n_c}",
-            (th, rho),
-            textcoords="offset points",
-            xytext=(0, 8),
-            ha="center",
-            fontsize=8,
-        )
+        if np.isfinite(rho):
+            ax.annotate(
+                f"n={n_c}",
+                (th, rho),
+                textcoords="offset points",
+                xytext=(0, 8),
+                ha="center",
+                fontsize=8,
+            )
 
     ax.set_xlabel("Minimum Occurrence Count Threshold (records per 5° cell)", fontsize=11)
     ax.set_ylabel("Correlation with Temperature Stability", fontsize=11)
-    ax.set_title("Sensitivity of Stability–Biodiversity Correlation to Sampling Effort Thresholds", fontsize=12)
+    ax.set_title("Sensitivity of Stability–Biodiversity Correlation with 95% CIs", fontsize=12)
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend(loc="lower right")
     fig.tight_layout()
     fig.savefig(config.MAPS_DIR / "biodiversity_vs_stability_by_threshold.png", dpi=200)
     plt.close(fig)
 
-    # 3. 5° Species Richness Map
+    # 3. 5° Species Richness Map using Log Scale
     fig, ax = plt.subplots(figsize=(12, 6))
     grid = np.full((36, 72), np.nan, dtype="float32")
     for _, row in df.iterrows():
@@ -226,19 +250,21 @@ def _render_plots(df: pd.DataFrame, sens: pd.DataFrame, rho_primary: float, p_pr
         grid[raster_row, lon_idx] = float(row["species_richness"])
 
     masked = np.ma.masked_invalid(grid)
+    vmax = float(np.nanmax(grid)) if np.any(np.isfinite(grid)) else 100.0
     image = ax.imshow(
         masked,
         extent=(-180.0, 180.0, -90.0, 90.0),
         origin="upper",
         aspect="auto",
         cmap="plasma",
+        norm=colors.LogNorm(vmin=1.0, vmax=vmax),
     )
     ax.set(
-        title="GBIF Observed Unique Species Richness per 5° Grid Cell",
+        title="GBIF Observed Unique Species Richness per 5° Grid Cell (Log Scale)",
         xlabel="Longitude (°)",
         ylabel="Latitude (°)",
     )
-    fig.colorbar(image, ax=ax, orientation="horizontal", label="Unique Species Count", pad=0.12)
+    fig.colorbar(image, ax=ax, orientation="horizontal", label="Unique Species Count (Log Scale)", pad=0.12)
     fig.tight_layout()
     fig.savefig(config.MAPS_DIR / "gbif_species_richness_5deg.png", dpi=200)
     plt.close(fig)
@@ -259,13 +285,16 @@ def run_analysis() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         "cell_area_km2",
         "occurrence_count",
         "species_richness",
+        "richness_rarefied_5",
+        "richness_rarefied_10",
         "bio1_current_c",
         "bio1_late_holocene_c",
         "bio1_lgm_c",
         "bio1_sd_c",
         "temperature_stability_index",
     ]
-    df_final = df[final_cols].copy()
+    available_cols = [c for c in final_cols if c in df.columns]
+    df_final = df[available_cols].copy()
     df_final.to_csv(config.FINAL_ANALYSIS_CSV, index=False)
     df_final.to_csv(config.RESULTS_DIR / "final_biodiversity_climate_5deg.csv", index=False)
 
@@ -292,9 +321,50 @@ def run_analysis() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             "correlation_coefficient": rho_prim,
             "p_value": p_prim,
             "covariates_controlled": "none",
-            "interpretation": "Primary test: unadjusted bivariate rank association across all occupied 5° cells.",
+            "interpretation": "Primary test: unadjusted bivariate rank association across all occupied 5° cells. Note p-values do not adjust for spatial autocorrelation.",
         }
     )
+
+    # Primary Spearman test for cells with >=5 records (weak cells filtered)
+    mask_5rec = effort >= 5
+    if mask_5rec.sum() > 3:
+        rho_5rec, p_5rec = _spearman(y[mask_5rec], x[mask_5rec])
+        stats_rows.append(
+            {
+                "analysis_scale": "5deg_cell_min5rec",
+                "climate_variable": "temperature_stability_index",
+                "response_variable": "species_richness",
+                "model": "spearman_min5_records",
+                "primary_test": False,
+                "n": int(mask_5rec.sum()),
+                "correlation_coefficient": rho_5rec,
+                "p_value": p_5rec,
+                "covariates_controlled": "filter: occurrence_count >= 5",
+                "interpretation": "Primary test restricted to cells with >=5 records, excluding low-effort fringe cells.",
+            }
+        )
+
+    # Rarefied richness (10 records) test
+    if "richness_rarefied_10" in df.columns:
+        valid_rar10 = df["richness_rarefied_10"].notna()
+        if valid_rar10.sum() > 3:
+            y_rar10 = df.loc[valid_rar10, "richness_rarefied_10"].to_numpy(dtype="float64")
+            x_rar10 = df.loc[valid_rar10, "temperature_stability_index"].to_numpy(dtype="float64")
+            rho_rar10, p_rar10 = _spearman(y_rar10, x_rar10)
+            stats_rows.append(
+                {
+                    "analysis_scale": "5deg_cell_rarefied10",
+                    "climate_variable": "temperature_stability_index",
+                    "response_variable": "richness_rarefied_10",
+                    "model": "spearman_rarefied_10_records",
+                    "primary_test": False,
+                    "n": int(valid_rar10.sum()),
+                    "correlation_coefficient": rho_rar10,
+                    "p_value": p_rar10,
+                    "covariates_controlled": "fixed_sample_rarefaction_10_records",
+                    "interpretation": "Fixed-sample rarefied richness (10 records per cell) to control effort variation.",
+                }
+            )
 
     # Stability SD contrast
     rho_sd, p_sd = _spearman(y, sd)
@@ -344,23 +414,6 @@ def run_analysis() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             "p_value": p_alat,
             "covariates_controlled": "abs(latitude)",
             "interpretation": "Controls for latitudinal diversity gradient (equator-to-pole distance).",
-        }
-    )
-
-    # Partial: control signed latitude
-    r_slat, p_slat = _partial_spearman(y, x, [signed_lat])
-    stats_rows.append(
-        {
-            "analysis_scale": "5deg_cell",
-            "climate_variable": "temperature_stability_index",
-            "response_variable": "species_richness",
-            "model": "partial_spearman_control_signed_latitude",
-            "primary_test": False,
-            "n": len(df),
-            "correlation_coefficient": r_slat,
-            "p_value": p_slat,
-            "covariates_controlled": "signed_latitude",
-            "interpretation": "Linear signed latitude control (-90 to +90).",
         }
     )
 
@@ -420,42 +473,44 @@ def run_analysis() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     statistics = pd.DataFrame(stats_rows)
     statistics.to_csv(config.BIODIV_CLIMATE_STATS_CSV, index=False)
 
-    # 2. Sampling Effort / Record Threshold Sensitivity
+    # 2. Sampling Effort / Record Threshold Sensitivity with 95% CIs
     sens_rows = []
     thresholds = [1, 2, 5, 10, 20, 50, 100]
     for th in thresholds:
         mask = df["occurrence_count"] >= th
         sub = df.loc[mask]
+        n_c = len(sub)
         sub_y = sub["species_richness"].to_numpy(dtype="float64")
         sub_x = sub["temperature_stability_index"].to_numpy(dtype="float64")
         sub_eff = sub["occurrence_count"].to_numpy(dtype="float64")
         sub_alat = np.abs(sub["cell_latitude_center_climate"].to_numpy(dtype="float64"))
 
         r_th, p_th = _spearman(sub_y, sub_x)
-        r_part_eff, p_part_eff = _partial_spearman(sub_y, sub_x, [sub_eff])
-        r_part_lat, p_part_lat = _partial_spearman(sub_y, sub_x, [sub_alat])
+        rho_low, rho_high = _confidence_interval(r_th, n_c)
         r_part_both, p_part_both = _partial_spearman(sub_y, sub_x, [sub_eff, sub_alat])
+        part_low, part_high = _confidence_interval(r_part_both, n_c)
 
         sens_rows.append(
             {
                 "min_occurrence_threshold": th,
-                "n_cells": len(sub),
-                "pct_cells_retained": float(len(sub) / len(df) * 100.0),
+                "n_cells": n_c,
+                "pct_cells_retained": float(n_c / len(df) * 100.0),
                 "spearman_rho": r_th,
+                "spearman_rho_ci_lower": rho_low,
+                "spearman_rho_ci_upper": rho_high,
                 "spearman_p_value": p_th,
-                "partial_r_control_effort": r_part_eff,
-                "partial_p_control_effort": p_part_eff,
-                "partial_r_control_abs_lat": r_part_lat,
-                "partial_p_control_abs_lat": p_part_lat,
                 "partial_r_control_effort_and_abs_lat": r_part_both,
+                "partial_r_ci_lower": part_low,
+                "partial_r_ci_upper": part_high,
                 "partial_p_control_effort_and_abs_lat": p_part_both,
             }
         )
 
     sensitivity = pd.DataFrame(sens_rows)
     sensitivity.to_csv(config.BIODIV_CLIMATE_SENSITIVITY_CSV, index=False)
+    sensitivity.to_csv(config.TABLES_DIR / "biodiversity_climate_sensitivity_thresholds.csv", index=False)
 
-    # 3. Moran's I Spatial Autocorrelation
+    # 3. Moran's I Spatial Autocorrelation with Dynamic Interpretation
     lat_idx = df["grid_lat_index_climate"].to_numpy(dtype=int)
     lon_idx = df["grid_lon_index_climate"].to_numpy(dtype=int)
     weights = _queen_weights(lat_idx, lon_idx)
@@ -475,23 +530,46 @@ def run_analysis() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     moran_rows = []
     for var_name, values in moran_specs:
         m_res = _morans_i(values, weights, permutations=999)
+        mi = m_res["morans_i"]
+        pv = m_res["morans_i_p_value"]
+        if np.isfinite(mi):
+            direction = "Positive" if mi > 0 else "Negative"
+            sig_text = f"(p = {pv:.4f})" if pv > 0.001 else "(p <= 0.001)"
+            interp = f"{direction} spatial autocorrelation detected {sig_text}; spatial clustering indicates non-independence of cells."
+        else:
+            interp = "Spatial autocorrelation could not be calculated."
+
         moran_rows.append(
             {
                 "variable": var_name,
                 "n": len(df),
-                "weight_scheme": "queen_contiguity_on_5deg_grid",
+                "weight_scheme": "row_standardized_queen_contiguity_5deg",
                 **m_res,
-                "interpretation": (
-                    "Positive spatial autocorrelation detected (p <= 0.001); "
-                    "spatial clustering indicates non-independence of cells."
-                ),
+                "interpretation": interp,
             }
         )
 
     moran_df = pd.DataFrame(moran_rows)
     moran_df.to_csv(config.BIODIV_CLIMATE_MORAN_CSV, index=False)
 
-    # 4. Render plots
-    _render_plots(df, sensitivity, rho_prim, p_prim)
+    # 4. Render plots using dynamic statistics summary
+    stats_summary = {
+        "n": len(df),
+        "rho_primary": rho_prim,
+        "p_primary": p_prim,
+        "r_eff": r_eff,
+        "p_eff": p_eff,
+        "r_both": r_both,
+        "p_both": p_both,
+        "r_extra": r_extra,
+        "p_extra": p_extra,
+        "r_trop": r_trop,
+        "p_trop": p_trop,
+        "moran_i_rich": float(moran_df.loc[moran_df["variable"] == "species_richness", "morans_i"].values[0]),
+        "moran_p_rich": float(moran_df.loc[moran_df["variable"] == "species_richness", "morans_i_p_value"].values[0]),
+        "moran_i_stab": float(moran_df.loc[moran_df["variable"] == "temperature_stability_index", "morans_i"].values[0]),
+        "moran_p_stab": float(moran_df.loc[moran_df["variable"] == "temperature_stability_index", "morans_i_p_value"].values[0]),
+    }
+    _render_plots(df, sensitivity, stats_summary)
 
     return statistics, sensitivity, moran_df

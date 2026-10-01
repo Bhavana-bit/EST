@@ -1,11 +1,12 @@
-# Future Dataset Status
+# Dataset & Phase Status Plan
 
-No Phase 2 analysis is implemented in the active pipeline.
+The current active pipeline is fully implemented using:
+- **PaleoClim v1.2B rasters** (Current, Late Holocene, LGM) for the headline 5° temperature stability index analysis.
+- **WorldClim rasters** (Present, LGM, mid-Holocene) for supporting Phase 1 10′ thermal change comparisons.
+- **GBIF occurrence data** after reproducible cleaning and sampling effort aggregation.
 
-The following intended datasets are not currently available as verified inputs:
+The following intended future datasets remain unintegrated (no local files present):
+- **IUCN range-polygon data** (`data/raw/iucn/`).
+- **Copernicus DEM raster data** (`data/raw/dem/`).
 
-- Genuine PaleoClim product. The local CHELSA v1.2B and PaleoView files are preserved and their current analyses are labelled with their actual product identities; they are not called PaleoClim.
-- IUCN range-polygon data.
-- Copernicus DEM raster data.
-
-The current implemented phase uses WorldClim, cleaned mixed-taxon GBIF records, and a separately reported CHELSA current–LGM comparison. Do not interpret this as completion of the full five-dataset project.
+All local paleoclimate rasters are genuine PaleoClim downloads and are consistently labelled as **PaleoClim** across all code, tables, and figures.

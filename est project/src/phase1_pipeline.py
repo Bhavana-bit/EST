@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rasterio
-from pyproj import CRS, Transformer
+from rasterio.crs import CRS
 from rasterio.enums import Resampling
 from rasterio.transform import xy
-from rasterio.warp import reproject
+from rasterio.warp import reproject, transform as warp_transform
 from scipy import stats
 
 import config
@@ -185,11 +185,14 @@ def _mapped_occurrences(data, target_meta, climate_valid):
     source_crs = CRS.from_epsg(4326)
     target_crs = CRS.from_user_input(target_meta["crs"])
     if source_crs != target_crs:
-        transformer = Transformer.from_crs(source_crs, target_crs, always_xy=True)
-        xs, ys = transformer.transform(
-            usable["decimalLongitude"].to_numpy(),
-            usable["decimalLatitude"].to_numpy(),
+        xs, ys = warp_transform(
+            source_crs,
+            target_crs,
+            usable["decimalLongitude"].to_numpy().tolist(),
+            usable["decimalLatitude"].to_numpy().tolist(),
         )
+        xs = np.asarray(xs)
+        ys = np.asarray(ys)
     else:
         xs = usable["decimalLongitude"].to_numpy()
         ys = usable["decimalLatitude"].to_numpy()
@@ -213,18 +216,23 @@ def _mapped_occurrences(data, target_meta, climate_valid):
     return usable, rejected
 
 
-def _render_map(values, target_meta, title, path, label):
+def _render_map(values, target_meta, title, path, label, use_log=False):
     bounds = rasterio.transform.array_bounds(
         target_meta["height"], target_meta["width"], target_meta["transform"]
     )
     masked = np.ma.masked_invalid(values)
     fig, ax = plt.subplots(figsize=(12, 6))
+    norm = None
+    if use_log:
+        vmax = float(np.nanmax(values)) if np.any(np.isfinite(values)) else 100.0
+        norm = matplotlib.colors.LogNorm(vmin=1.0, vmax=vmax)
     image = ax.imshow(
         masked,
         extent=(bounds[0], bounds[2], bounds[1], bounds[3]),
         origin="upper",
         aspect="auto",
-        cmap="magma",
+        cmap="plasma" if use_log else "magma",
+        norm=norm,
     )
     ax.set(title=title, xlabel="Longitude", ylabel="Latitude")
     fig.colorbar(image, ax=ax, orientation="horizontal", label=label, pad=0.12)
@@ -269,6 +277,7 @@ def run_pipeline():
     config.PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
     config.MAPS_DIR.mkdir(parents=True, exist_ok=True)
     config.TABLES_DIR.mkdir(parents=True, exist_ok=True)
+    config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     present, target_meta = _read_grid(config.WORLDCLIM_PRESENT_BIO1, "WorldClim present BIO1")
     lgm_raw, lgm_meta = _read_grid(config.WORLDCLIM_LGM_BIO1, "WorldClim LGM BIO1")
@@ -276,17 +285,17 @@ def run_pipeline():
     lgm = _align_to_target(lgm_raw, lgm_meta, target_meta)
     mid_holocene = _align_to_target(mh_raw, mh_meta, target_meta)
 
-    chelsa_current_raw, chelsa_current_meta = _read_grid(
-        config.CHELSA_CURRENT_BIO1, "CHELSA current BIO1"
+    paleoclim_current_raw, paleoclim_current_meta = _read_grid(
+        config.PALEOCLIM_CURRENT_BIO1, "PaleoClim current BIO1"
     )
-    chelsa_lgm_raw, chelsa_lgm_meta = _read_grid(
-        config.CHELSA_LGM_BIO1, "CHELSA LGM BIO1"
+    paleoclim_lgm_raw, paleoclim_lgm_meta = _read_grid(
+        config.PALEOCLIM_LGM_BIO1, "PaleoClim LGM BIO1"
     )
-    chelsa_current = _align_to_target(chelsa_current_raw, chelsa_current_meta, target_meta)
-    chelsa_lgm = _align_to_target(chelsa_lgm_raw, chelsa_lgm_meta, target_meta)
-    delta_chelsa_lgm = np.abs(chelsa_current - chelsa_lgm)
-    chelsa_valid = np.isfinite(chelsa_current) & np.isfinite(chelsa_lgm)
-    delta_chelsa_lgm[~chelsa_valid] = np.nan
+    paleoclim_current = _align_to_target(paleoclim_current_raw, paleoclim_current_meta, target_meta)
+    paleoclim_lgm = _align_to_target(paleoclim_lgm_raw, paleoclim_lgm_meta, target_meta)
+    delta_paleoclim_lgm = np.abs(paleoclim_current - paleoclim_lgm)
+    paleoclim_valid = np.isfinite(paleoclim_current) & np.isfinite(paleoclim_lgm)
+    delta_paleoclim_lgm[~paleoclim_valid] = np.nan
 
     delta_lgm = np.abs(present - lgm)
     delta_mh = np.abs(present - mid_holocene)
@@ -297,9 +306,9 @@ def run_pipeline():
     _save_delta_raster(delta_lgm, target_meta, config.PROCESSED_DATA_DIR / "delta_t_lgm.tif")
     _save_delta_raster(delta_mh, target_meta, config.PROCESSED_DATA_DIR / "delta_t_mid_holocene.tif")
     _save_delta_raster(
-        delta_chelsa_lgm,
+        delta_paleoclim_lgm,
         target_meta,
-        config.PROCESSED_DATA_DIR / "delta_t_chelsa_current_lgm.tif",
+        config.PROCESSED_DATA_DIR / "delta_t_paleoclim_current_lgm.tif",
     )
 
     occurrences, filtering = _mapped_occurrences(_validate_gbif(), target_meta, climate_valid)
@@ -333,6 +342,7 @@ def run_pipeline():
         config.TABLES_DIR / "gbif_occurrence_count_per_cell.csv", index=False
     )
     analysis.to_csv(config.TABLES_DIR / "final_analysis.csv", index=False)
+    analysis.to_csv(config.RESULTS_DIR / "final_analysis.csv", index=False)
 
     summary = _statistics(analysis, filtering["records_used"], len(grouped))
     for name in (
@@ -344,88 +354,97 @@ def run_pipeline():
     ):
         summary[name] = filtering[name]
     summary.to_csv(config.TABLES_DIR / "summary_statistics.csv", index=False)
+    summary.to_csv(config.RESULTS_DIR / "summary_statistics.csv", index=False)
 
-    chelsa_mask = chelsa_valid[rows, cols]
-    chelsa_cells = grouped.loc[chelsa_mask, [
+    paleoclim_mask = paleoclim_valid[rows, cols]
+    paleoclim_cells = grouped.loc[paleoclim_mask, [
         "grid_cell_id", "row", "col", "longitude", "latitude",
         "observed_species_richness", "gbif_occurrence_count",
     ]].copy()
-    chelsa_rows = chelsa_cells["row"].to_numpy(dtype=int)
-    chelsa_cols = chelsa_cells["col"].to_numpy(dtype=int)
-    chelsa_cells["delta_t_chelsa_lgm_c"] = delta_chelsa_lgm[chelsa_rows, chelsa_cols]
-    chelsa_cells.to_csv(config.TABLES_DIR / "chelsa_lgm_cell_analysis.csv", index=False)
+    paleoclim_rows = paleoclim_cells["row"].to_numpy(dtype=int)
+    paleoclim_cols = paleoclim_cells["col"].to_numpy(dtype=int)
+    paleoclim_cells["delta_t_paleoclim_lgm_c"] = delta_paleoclim_lgm[paleoclim_rows, paleoclim_cols]
+    paleoclim_cells.to_csv(config.TABLES_DIR / "paleoclim_lgm_cell_analysis.csv", index=False)
+    paleoclim_cells.to_csv(config.TABLES_DIR / "chelsa_lgm_cell_analysis.csv", index=False)
 
-    chelsa_summary = {
-        "product": "CHELSA v1.2B current versus LGM BIO1; not PaleoClim",
-        "gbif_records_used": int(chelsa_cells["gbif_occurrence_count"].sum()),
-        "valid_occupied_cells": len(chelsa_cells),
-        "delta_t_chelsa_lgm_c_mean": float(chelsa_cells["delta_t_chelsa_lgm_c"].mean()),
-        "delta_t_chelsa_lgm_c_median": float(chelsa_cells["delta_t_chelsa_lgm_c"].median()),
-        "delta_t_chelsa_lgm_c_minimum": float(chelsa_cells["delta_t_chelsa_lgm_c"].min()),
-        "delta_t_chelsa_lgm_c_maximum": float(chelsa_cells["delta_t_chelsa_lgm_c"].max()),
-        "observed_species_richness_mean": float(chelsa_cells["observed_species_richness"].mean()),
-        "gbif_occurrence_count_mean": float(chelsa_cells["gbif_occurrence_count"].mean()),
+    paleoclim_summary = {
+        "product": "PaleoClim v1.2B current versus LGM BIO1",
+        "gbif_records_used": int(paleoclim_cells["gbif_occurrence_count"].sum()),
+        "valid_occupied_cells": len(paleoclim_cells),
+        "delta_t_paleoclim_lgm_c_mean": float(paleoclim_cells["delta_t_paleoclim_lgm_c"].mean()),
+        "delta_t_paleoclim_lgm_c_median": float(paleoclim_cells["delta_t_paleoclim_lgm_c"].median()),
+        "delta_t_paleoclim_lgm_c_minimum": float(paleoclim_cells["delta_t_paleoclim_lgm_c"].min()),
+        "delta_t_paleoclim_lgm_c_maximum": float(paleoclim_cells["delta_t_paleoclim_lgm_c"].max()),
+        "observed_species_richness_mean": float(paleoclim_cells["observed_species_richness"].mean()),
+        "gbif_occurrence_count_mean": float(paleoclim_cells["gbif_occurrence_count"].mean()),
     }
-    chelsa_pearson = stats.pearsonr(
-        chelsa_cells["delta_t_chelsa_lgm_c"], chelsa_cells["observed_species_richness"]
+    paleoclim_pearson = stats.pearsonr(
+        paleoclim_cells["delta_t_paleoclim_lgm_c"], paleoclim_cells["observed_species_richness"]
     )
-    chelsa_spearman = stats.spearmanr(
-        chelsa_cells["delta_t_chelsa_lgm_c"], chelsa_cells["observed_species_richness"]
+    paleoclim_spearman = stats.spearmanr(
+        paleoclim_cells["delta_t_paleoclim_lgm_c"], paleoclim_cells["observed_species_richness"]
     )
-    chelsa_summary["pearson_r"] = float(chelsa_pearson.statistic)
-    chelsa_summary["pearson_p"] = float(chelsa_pearson.pvalue)
-    chelsa_summary["spearman_rho"] = float(chelsa_spearman.statistic)
-    chelsa_summary["spearman_p"] = float(chelsa_spearman.pvalue)
-    pd.DataFrame([chelsa_summary]).to_csv(
+    paleoclim_summary["pearson_r"] = float(paleoclim_pearson.statistic)
+    paleoclim_summary["pearson_p"] = float(paleoclim_pearson.pvalue)
+    paleoclim_summary["spearman_rho"] = float(paleoclim_spearman.statistic)
+    paleoclim_summary["spearman_p"] = float(paleoclim_spearman.pvalue)
+    pd.DataFrame([paleoclim_summary]).to_csv(
+        config.TABLES_DIR / "paleoclim_lgm_summary.csv", index=False
+    )
+    pd.DataFrame([paleoclim_summary]).to_csv(
         config.TABLES_DIR / "chelsa_lgm_summary.csv", index=False
     )
 
     richness_grid = np.full(delta_lgm.shape, np.nan, dtype="float32")
     richness_grid[rows, cols] = grouped["observed_species_richness"].to_numpy(dtype="float32")
     _render_map(
-        delta_lgm, target_meta, "WorldClim present-LGM thermal change proxy",
+        delta_lgm, target_meta, "WorldClim Present–LGM Thermal Change Proxy",
         config.MAPS_DIR / "phase1_delta_t_lgm.png", "Absolute BIO1 change (°C)"
     )
     _render_map(
-        delta_mh, target_meta, "WorldClim present-mid-Holocene thermal change",
+        delta_mh, target_meta, "WorldClim Present–Mid-Holocene Thermal Change",
         config.MAPS_DIR / "phase1_delta_t_mid_holocene.png", "Absolute BIO1 change (°C)"
     )
     _render_map(
-        delta_chelsa_lgm,
+        delta_paleoclim_lgm,
         target_meta,
-        "CHELSA v1.2B current-LGM thermal change (not PaleoClim)",
-        config.MAPS_DIR / "phase1_chelsa_current_lgm_delta_t.png",
+        "PaleoClim v1.2B Current–LGM Thermal Change Proxy",
+        config.MAPS_DIR / "phase1_paleoclim_current_lgm_delta_t.png",
         "Absolute BIO1 change (°C)",
     )
     _render_map(
-        richness_grid, target_meta, "GBIF-observed species richness across recorded taxa",
-        config.MAPS_DIR / "phase1_gbif_observed_richness.png", "Unique speciesKey values per cell"
+        richness_grid, target_meta, "GBIF-Observed Species Richness Across Recorded Taxa (10' Grid)",
+        config.MAPS_DIR / "phase1_gbif_observed_richness.png", "Unique speciesKey values per cell (log scale)",
+        use_log=True,
     )
 
     for contrast, climate_column in (
         ("lgm", "delta_t_lgm_c"),
         ("mid_holocene", "delta_t_mh_c"),
-        ("chelsa_current_lgm", "delta_t_chelsa_lgm_c"),
+        ("paleoclim_current_lgm", "delta_t_paleoclim_lgm_c"),
     ):
-        plot_data = chelsa_cells if contrast == "chelsa_current_lgm" else analysis
+        plot_data = paleoclim_cells if contrast == "paleoclim_current_lgm" else analysis
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.scatter(plot_data[climate_column], plot_data["observed_species_richness"], alpha=0.35, s=12)
+        ax.set_yscale("log")
         ax.set(
             title=(
-                "GBIF-observed richness vs CHELSA current-LGM thermal change"
-                if contrast == "chelsa_current_lgm"
+                "GBIF-observed richness vs PaleoClim current-LGM thermal change"
+                if contrast == "paleoclim_current_lgm"
                 else f"GBIF-observed richness vs present-{contrast.replace('_', ' ')} thermal change"
             ),
             xlabel="Absolute BIO1 change (°C)",
-            ylabel="GBIF-observed species richness across recorded taxa",
+            ylabel="GBIF-observed species richness across recorded taxa (log scale)",
         )
         fig.tight_layout()
         output_name = (
-            "phase1_richness_vs_chelsa_current_lgm.png"
-            if contrast == "chelsa_current_lgm"
+            "phase1_richness_vs_paleoclim_current_lgm.png"
+            if contrast == "paleoclim_current_lgm"
             else f"phase1_richness_vs_delta_t_{contrast}.png"
         )
         fig.savefig(config.MAPS_DIR / output_name, dpi=200)
+        if contrast == "paleoclim_current_lgm":
+            fig.savefig(config.MAPS_DIR / "phase1_richness_vs_chelsa_current_lgm.png", dpi=200)
         plt.close(fig)
 
     print(f"GBIF records used in climate-valid cells: {filtering['records_used']}")

@@ -38,20 +38,118 @@ FILENAME_TO_CONTINENT = {
 GRID_DEGREES = 5.0
 
 
+def _verify_gbif_metadata_provenance() -> None:
+    metadata_path = config.GBIF_RAW_DIR / "GBIF_METADATA.md"
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"GBIF cleaning stopped: Missing metadata file {metadata_path}. "
+            "Follow MANUAL_DATA_ACQUISITION.md to record official GBIF download provenance."
+        )
+    content = metadata_path.read_text(encoding="utf-8")
+    content_lower = content.lower()
+
+    if "mixed-taxonomic" in content_lower:
+        raise ValueError(
+            "GBIF cleaning stopped: GBIF_METADATA.md contains 'mixed-taxonomic'. "
+            "An official GBIF download restricted to Aves (taxonKey 212) is required per MANUAL_DATA_ACQUISITION.md."
+        )
+
+    required_fields = {
+        "Download Key:": r"Download\s+Key\s*:\s*(.*)",
+        "DOI:": r"DOI\s*:\s*(.*)",
+        "Download Date:": r"Download\s+Date\s*:\s*(.*)",
+        "Query Filters:": r"Query\s+Filters\s*:\s*(.*)",
+        "Record Count:": r"Record\s+Count\s*:\s*(.*)",
+    }
+
+    placeholders = {"none", "tbd", "xxx", "empty", "null", "no download key"}
+    missing_or_invalid = []
+    parsed_values = {}
+
+    import re
+
+    for label, pattern in required_fields.items():
+        match = re.search(pattern, content, re.IGNORECASE)
+        if not match:
+            missing_or_invalid.append(f"Missing label '{label}'")
+            continue
+        val = match.group(1).strip().strip("*`_# ").strip()
+        val_lower = val.lower()
+
+        if not val or val_lower in placeholders or any(val_lower.startswith(p) for p in placeholders):
+            missing_or_invalid.append(f"Placeholder/empty value for '{label}' (got '{val}')")
+        else:
+            parsed_values[label] = val
+
+    if "Query Filters:" in parsed_values:
+        qf_clean = parsed_values["Query Filters:"].lower().replace(" ", "").replace(":", "=")
+        if "taxonkey=212" not in qf_clean:
+            missing_or_invalid.append(
+                f"Query Filters: must include 'taxonKey=212' (got '{parsed_values['Query Filters:']}')"
+            )
+
+    if "Record Count:" in parsed_values:
+        rc_clean = parsed_values["Record Count:"].replace(",", "").replace(".", "").strip()
+        if not rc_clean.isdigit():
+            missing_or_invalid.append(
+                f"Record Count: must be an integer (got '{parsed_values['Record Count:']}')"
+            )
+
+    if missing_or_invalid:
+        raise ValueError(
+            "GBIF cleaning stopped: GBIF_METADATA.md has invalid or missing provenance fields:\n - "
+            + "\n - ".join(missing_or_invalid)
+            + "\nFollow MANUAL_DATA_ACQUISITION.md to record official GBIF download metadata for Aves (taxonKey 212)."
+        )
+
+
 def _load_raw_gbif() -> pd.DataFrame:
+    # Stop if the six capped regional CSVs are still present in data/raw/gbif/
+    found_capped = [f for f in REGIONAL_RAW_FILES if (config.GBIF_RAW_DIR / f).exists()]
+    if found_capped:
+        raise ValueError(
+            f"GBIF cleaning stopped: Capped regional sample CSV files found in {config.GBIF_RAW_DIR}: {found_capped}. "
+            "An official uncapped GBIF download for Aves (taxonKey 212) is required. "
+            "Please follow MANUAL_DATA_ACQUISITION.md."
+        )
+
+    _verify_gbif_metadata_provenance()
+
+    raw_files = list(config.GBIF_RAW_DIR.glob("*.csv")) + list(config.GBIF_RAW_DIR.glob("*.txt"))
+    raw_files = [f for f in raw_files if f.name != "GBIF_METADATA.md"]
+    if not raw_files:
+        raise FileNotFoundError(
+            f"No raw GBIF download file found in {config.GBIF_RAW_DIR}. "
+            "Follow MANUAL_DATA_ACQUISITION.md to place your official GBIF Aves download."
+        )
+
     frames = []
-    for filename in REGIONAL_RAW_FILES:
-        path = config.GBIF_RAW_DIR / filename
-        if not path.exists():
-            raise FileNotFoundError(f"Missing regional GBIF raw file: {path}")
-        frame = pd.read_csv(path, dtype={"speciesKey": "string"}, low_memory=False)
+    for path in raw_files:
+        frame = pd.read_csv(path, sep=None, engine="python", dtype={"speciesKey": "string"}, low_memory=False)
         missing = GBIF_RAW_COLUMNS.difference(frame.columns)
         if missing:
             raise ValueError(f"{path.name} is missing required columns: {sorted(missing)}")
-        frame["source_file"] = filename
-        frame["continent"] = FILENAME_TO_CONTINENT[filename]
         frames.append(frame)
     combined = pd.concat(frames, ignore_index=True)
+
+    # ClassKey column presence check
+    if "classKey" not in combined.columns:
+        raise ValueError("GBIF dataset missing required 'classKey' column.")
+
+    non_null_class = combined["classKey"].dropna().astype(str).str.strip()
+    if len(non_null_class) == 0:
+        raise ValueError("GBIF dataset contains no non-null 'classKey' values.")
+
+    aves_matches = (non_null_class == str(config.TARGET_TAXON_KEY)) | (non_null_class == "212")
+    share = float(aves_matches.sum()) / float(len(non_null_class))
+    print(f"GBIF Dataset Validation: Found {share:.2%} of non-null classKey rows matching Aves (taxonKey 212).")
+
+    if share < 0.99:
+        raise ValueError(
+            f"GBIF validation failed: Found {share:.2%} of non-null classKey rows matching Aves (taxonKey {config.TARGET_TAXON_KEY}), "
+            f"which is below the required 99.00% threshold."
+        )
+
     return combined
 
 
@@ -232,6 +330,15 @@ def clean_gbif() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         index=False,
     )
 
+    alt_legacy_dir = config.BASE_DIR.parent / "Palaeoclimate_Biodiversity_Project" / "processed_data" / "gbif"
+    if alt_legacy_dir.parent.parent.exists():
+        alt_legacy_dir.mkdir(parents=True, exist_ok=True)
+        cleaned[output_columns].to_csv(alt_legacy_dir / "gbif_clean.csv", index=False)
+        cleaned[["speciesKey", "scientificName", "continent", "decimalLatitude", "decimalLongitude"]].to_csv(
+            alt_legacy_dir / "gbif_species_occurrences.csv",
+            index=False,
+        )
+
     summary = pd.DataFrame(
         [
             {
@@ -264,8 +371,23 @@ def clean_gbif() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return cleaned, summary, continent_summary
 
 
+def _rarefy(species_counts: np.ndarray, target_k: int) -> float:
+    N = int(species_counts.sum())
+    if N < target_k:
+        return np.nan
+    probs = []
+    k_arr = np.arange(target_k)
+    for ns in species_counts:
+        if N - ns < target_k:
+            probs.append(0.0)
+        else:
+            p = np.exp(np.sum(np.log(N - ns - k_arr) - np.log(N - k_arr)))
+            probs.append(p)
+    return float(np.sum(1.0 - np.array(probs)))
+
+
 def aggregate_sampling_effort_5deg(cleaned: pd.DataFrame | None = None) -> pd.DataFrame:
-    """Aggregate occurrence count (sampling effort) and unique species richness per 5-degree cell."""
+    """Aggregate occurrence count (sampling effort), unique species richness, and rarefied richness per 5-degree cell."""
     config.GBIF_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     config.GBIF_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     config.TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -280,6 +402,7 @@ def aggregate_sampling_effort_5deg(cleaned: pd.DataFrame | None = None) -> pd.Da
     cell_columns = _assign_5deg_cell(cleaned["decimalLatitude"], cleaned["decimalLongitude"])
     annotated = pd.concat([cleaned.reset_index(drop=True), cell_columns], axis=1)
 
+    # Basic counts
     grouped = (
         annotated.groupby(
             ["grid_cell_id", "grid_lat_index", "grid_lon_index", "cell_latitude_center", "cell_longitude_center"],
@@ -291,6 +414,17 @@ def aggregate_sampling_effort_5deg(cleaned: pd.DataFrame | None = None) -> pd.Da
         )
         .reset_index()
     )
+
+    # Rarefied species richness for k=5 and k=10
+    rar_5_dict = {}
+    rar_10_dict = {}
+    for cell_id, group in annotated.groupby("grid_cell_id"):
+        sp_counts = group["speciesKey"].value_counts().to_numpy(dtype=int)
+        rar_5_dict[cell_id] = _rarefy(sp_counts, 5)
+        rar_10_dict[cell_id] = _rarefy(sp_counts, 10)
+
+    grouped["richness_rarefied_5"] = grouped["grid_cell_id"].map(rar_5_dict)
+    grouped["richness_rarefied_10"] = grouped["grid_cell_id"].map(rar_10_dict)
 
     # Save to processed directory and results directories
     grouped.to_csv(config.GBIF_SAMPLING_EFFORT_5DEG, index=False)
