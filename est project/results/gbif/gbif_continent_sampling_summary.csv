@@ -1,0 +1,7 @@
+continent,raw_file,raw_records_downloaded,cleaned_records,unique_species,occupied_5deg_cells,median_records_per_cell,max_records_per_cell,median_species_per_cell,max_species_per_cell,sample_nature_note
+Africa,gbif_africa_5000.csv,5000,4308,2238,65,12.0,670,9.0,409,Sample-based occurrence archive (capped at 5000 records during download); not a complete biodiversity census.
+Asia,gbif_asia_5000.csv,5000,4639,1815,114,12.0,435,11.0,300,Sample-based occurrence archive (capped at 5000 records during download); not a complete biodiversity census.
+Europe,gbif_europe_5000.csv,5000,4795,404,30,29.5,1757,21.5,140,Sample-based occurrence archive (capped at 5000 records during download); not a complete biodiversity census.
+North America,gbif_north_america_1000.csv,1000,947,634,69,3.0,103,3.0,84,Sample-based occurrence archive (capped at 1000 records during download); not a complete biodiversity census.
+South America,gbif_south_america_1000.csv,1000,927,727,63,7.0,109,7.0,95,Sample-based occurrence archive (capped at 1000 records during download); not a complete biodiversity census.
+Oceania,gbif_oceania_1000.csv,1000,905,585,33,12.0,149,10.0,119,Sample-based occurrence archive (capped at 1000 records during download); not a complete biodiversity census.

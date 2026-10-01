@@ -1,0 +1,3 @@
+dataset,variable,n,weight_scheme,morans_i,morans_i_p_value,morans_i_permutations,interpretation_note
+5deg_stability_gbif,species_richness,369,queen_contiguity_on_5deg_grid_indices,0.3300979777309139,0.001,999,Global spatial autocorrelation on occupied 5° cells; high Moran's I suggests spatial clustering — inferential correlations may not be independent.
+5deg_stability_gbif,temperature_stability_index,369,queen_contiguity_on_5deg_grid_indices,0.7948452165109452,0.001,999,Global spatial autocorrelation on occupied 5° cells; high Moran's I suggests spatial clustering — inferential correlations may not be independent.

@@ -79,9 +79,19 @@ def _validate_gbif():
         raise ValueError("The selected GBIF table contains records without occurrence keys.")
 
     duplicate_occurrences = data["key"].duplicated(keep="first")
+    duplicate_species_coordinates = data.duplicated(
+        subset=["speciesKey", "decimalLatitude", "decimalLongitude"],
+        keep="first",
+    )
     data.attrs["duplicate_occurrence_keys_removed"] = int(duplicate_occurrences.sum())
-    if duplicate_occurrences.any():
-        data = data.loc[~duplicate_occurrences].copy()
+    data.attrs["duplicate_species_coordinate_records_removed"] = int(
+        duplicate_species_coordinates.sum()
+    )
+    if duplicate_occurrences.any() or duplicate_species_coordinates.any():
+        raise ValueError(
+            "The selected GBIF table still contains duplicate occurrence keys or "
+            "species-coordinate duplicates. Regenerate it with run_gbif_pipeline.py."
+        )
 
     data["decimalLatitude"] = pd.to_numeric(data["decimalLatitude"], errors="coerce")
     data["decimalLongitude"] = pd.to_numeric(data["decimalLongitude"], errors="coerce")

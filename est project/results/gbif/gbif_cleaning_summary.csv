@@ -1,0 +1,2 @@
+raw_records,records_after_coordinate_filtering,records_after_species_filtering,exact_duplicates_removed,species_coordinate_duplicates_removed,final_records,unique_species
+18000,18000,16764,0,243,16521,5895

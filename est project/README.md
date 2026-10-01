@@ -7,7 +7,7 @@
 This mid-evaluation phase uses three locally available datasets/products:
 
 - **WorldClim:** present, LGM, and mid-Holocene BIO1. BIO1 is converted from °C × 10 to °C. Present–LGM absolute change is the primary thermal-change proxy; present–mid-Holocene change is reported separately.
-- **GBIF:** species-rank occurrence records from the cleaned local table. Richness is unique `speciesKey` count per occupied grid cell; occurrence count is retained as a sampling-effort indicator. The records are mixed-taxonomic, so results are not bird or mammal richness and do not represent complete biodiversity.
+- **GBIF:** species-rank occurrence records from a reproducibly cleaned local table (`run_gbif_pipeline.py`). The raw download is capped unequally by continent (5,000 or 1,000 records). Cleaning keeps valid species-level coordinates, removes exact duplicate occurrence records, and removes repeated records of the same species at identical coordinates. Richness is unique `speciesKey` count per occupied grid cell; occurrence count is retained as a sampling-effort indicator. The records are mixed-taxonomic sample data, not a complete census of global biodiversity.
 - **CHELSA v1.2B:** a separate current–LGM BIO1 comparison using the locally available rasters. These files are not PaleoClim. The PaleoView late-Holocene archive is retained but not analyzed.
 
 The WorldClim present BIO1 raster defines the target grid. Past climate rasters and CHELSA rasters are aligned by geospatial reprojection using their CRS and transforms. The WorldClim and CHELSA comparisons are calculated separately. Associations are descriptive and do not establish causation.
@@ -16,19 +16,25 @@ The WorldClim present BIO1 raster defines the target grid. Past climate rasters 
 
 ## Run
 
-From this directory, validate inputs without writing outputs:
+Regenerate cleaned GBIF tables and the 5° sampling-effort summary:
+
+```bash
+python run_gbif_pipeline.py --clean-only
+```
+
+Run the full GBIF cleaning plus Phase 1 climate-richness analysis:
+
+```bash
+python run_gbif_pipeline.py
+```
+
+Validate Phase 1 inputs without writing outputs:
 
 ```bash
 python run_phase1.py --validate-only
 ```
 
-Run the analysis:
-
-```bash
-python run_phase1.py
-```
-
-Current tables and figures are saved in `results/tables/` and `results/maps/`. Processed rasters and GBIF tables are stored in `data/processed/`. The pipeline uses local data only and has no synthetic-data fallback.
+Current tables and figures are saved in `results/tables/` and `results/maps/`. Cleaned GBIF tables are stored in `processed_data/gbif/`; cleaning summaries are in `results/gbif/`. Climate DeltaT rasters are stored in `data/processed/`. The pipeline uses local data only and has no synthetic-data fallback.
 
 ## Main Outputs
 
